@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jogo da Forca</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: linear-gradient(135deg, #1f4e79, #2e75b6);
+    min-height: 100vh;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .card {
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    padding: 28px;
+    width: 100%;
+    max-width: 480px;
+    text-align: center;
+  }
+  h1 {
+    font-size: 22px;
+    color: #1f4e79;
+    margin: 0 0 10px;
+  }
+  .categoria {
+    font-size: 13px;
+    color: #777;
+    margin-bottom: 16px;
+  }
+  svg { margin: 10px auto; display: block; }
+  .palavra {
+    font-size: 30px;
+    letter-spacing: 8px;
+    font-weight: 700;
+    color: #1f4e79;
+    margin: 14px 0;
+    min-height: 40px;
+    word-break: break-all;
+  }
+  .tentativas {
+    font-size: 14px;
+    color: #555;
+    margin-bottom: 14px;
+  }
+  .teclado {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+    margin: 16px 0;
+  }
+  .tecla {
+    padding: 8px 0;
+    font-size: 14px;
+    font-weight: 600;
+    border: 1px solid #dce6f1;
+    background: #f4f8fc;
+    color: #1f4e79;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .tecla:hover:not(:disabled) { background: #dce6f1; }
+  .tecla:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+  .tecla.acerto { background: #b6e3b6; border-color: #7cc47c; }
+  .tecla.erro { background: #f3b6b6; border-color: #d97c7c; }
+  .mensagem {
+    margin-top: 14px;
+    font-size: 17px;
+    font-weight: 700;
+    min-height: 24px;
+  }
+  .mensagem.vitoria { color: #1f8a3d; }
+  .mensagem.derrota { color: #b00020; }
+  button.reiniciar {
+    margin-top: 16px;
+    padding: 10px 20px;
+    background: #1f4e79;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: none;
+  }
+  button.reiniciar:hover { background: #163a5c; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>Jogo da Forca</h1>
+  <div class="categoria" id="categoria"></div>
+
+  <svg id="desenho" width="180" height="200" viewBox="0 0 180 200">
+    <!-- base fixa -->
+    <line x1="10" y1="190" x2="120" y2="190" stroke="#1f4e79" stroke-width="4"/>
+    <line x1="40" y1="190" x2="40" y2="20" stroke="#1f4e79" stroke-width="4"/>
+    <line x1="40" y1="20" x2="120" y2="20" stroke="#1f4e79" stroke-width="4"/>
+    <line x1="120" y1="20" x2="120" y2="45" stroke="#1f4e79" stroke-width="4"/>
+    <!-- partes do boneco, ocultas por padrão -->
+    <circle id="p-cabeca" cx="120" cy="60" r="15" stroke="#b00020" stroke-width="3" fill="none" visibility="hidden"/>
+    <line id="p-corpo" x1="120" y1="75" x2="120" y2="125" stroke="#b00020" stroke-width="3" visibility="hidden"/>
+    <line id="p-bracoE" x1="120" y1="85" x2="100" y2="110" stroke="#b00020" stroke-width="3" visibility="hidden"/>
+    <line id="p-bracoD" x1="120" y1="85" x2="140" y2="110" stroke="#b00020" stroke-width="3" visibility="hidden"/>
+    <line id="p-pernaE" x1="120" y1="125" x2="100" y2="160" stroke="#b00020" stroke-width="3" visibility="hidden"/>
+    <line id="p-pernaD" x1="120" y1="125" x2="140" y2="160" stroke="#b00020" stroke-width="3" visibility="hidden"/>
+  </svg>
+
+  <div class="tentativas" id="tentativas"></div>
+  <div class="palavra" id="palavra"></div>
+
+  <div class="teclado" id="teclado"></div>
+
+  <div class="mensagem" id="mensagem"></div>
+  <button class="reiniciar" id="btnReiniciar">Jogar de novo</button>
+</div>
+
+<script>
+const palavras = [
+  { palavra: 'JAVASCRIPT', categoria: 'Linguagem de programação' },
+  { palavra: 'GITHUB', categoria: 'Ferramenta de desenvolvimento' },
+  { palavra: 'COMPUTADOR', categoria: 'Tecnologia' },
+  { palavra: 'TECLADO', categoria: 'Periférico' },
+  { palavra: 'INTERNET', categoria: 'Tecnologia' },
+  { palavra: 'PYTHON', categoria: 'Linguagem de programação' },
+  { palavra: 'BANCODEDADOS', categoria: 'Tecnologia' },
+  { palavra: 'ALGORITMO', categoria: 'Conceito' },
+  { palavra: 'NAVEGADOR', categoria: 'Software' },
+  { palavra: 'PROGRAMADOR', categoria: 'Profissão' },
+];
+
+const partesCorpo = ['p-cabeca', 'p-corpo', 'p-bracoE', 'p-bracoD', 'p-pernaE', 'p-pernaD'];
+const MAX_ERROS = partesCorpo.length;
+
+let palavraAtual = '';
+let categoriaAtual = '';
+let letrasCertas = new Set();
+let letrasErradas = new Set();
+let erros = 0;
+let jogoAtivo = true;
+
+const elPalavra = document.getElementById('palavra');
+const elCategoria = document.getElementById('categoria');
+const elTentativas = document.getElementById('tentativas');
+const elTeclado = document.getElementById('teclado');
+const elMensagem = document.getElementById('mensagem');
+const btnReiniciar = document.getElementById('btnReiniciar');
+
+function novoJogo() {
+  const escolha = palavras[Math.floor(Math.random() * palavras.length)];
+  palavraAtual = escolha.palavra;
+  categoriaAtual = escolha.categoria;
+  letrasCertas = new Set();
+  letrasErradas = new Set();
+  erros = 0;
+  jogoAtivo = true;
+
+  elCategoria.textContent = 'Categoria: ' + categoriaAtual;
+  elMensagem.textContent = '';
+  elMensagem.className = 'mensagem';
+  btnReiniciar.style.display = 'none';
+
+  partesCorpo.forEach(id => document.getElementById(id).setAttribute('visibility', 'hidden'));
+
+  montarTeclado();
+  atualizarTela();
+}
+
+function montarTeclado() {
+  elTeclado.innerHTML = '';
+  const alfabeto = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  for (const letra of alfabeto) {
+    const btn = document.createElement('button');
+    btn.className = 'tecla';
+    btn.textContent = letra;
+    btn.addEventListener('click', () => tentarLetra(letra, btn));
+    elTeclado.appendChild(btn);
+  }
+}
+
+function tentarLetra(letra, btn) {
+  if (!jogoAtivo) return;
+  btn.disabled = true;
+
+  if (palavraAtual.includes(letra)) {
+    letrasCertas.add(letra);
+    btn.classList.add('acerto');
+  } else {
+    letrasErradas.add(letra);
+    btn.classList.add('erro');
+    document.getElementById(partesCorpo[erros]).setAttribute('visibility', 'visible');
+    erros++;
+  }
+
+  atualizarTela();
+  verificarFim();
+}
+
+function atualizarTela() {
+  const exibida = palavraAtual
+    .split('')
+    .map(l => (letrasCertas.has(l) ? l : '_'))
+    .join(' ');
+  elPalavra.textContent = exibida;
+  elTentativas.textContent = `Erros: ${erros} de ${MAX_ERROS}`;
+}
+
+function verificarFim() {
+  const venceu = palavraAtual.split('').every(l => letrasCertas.has(l));
+  const perdeu = erros >= MAX_ERROS;
+
+  if (venceu) {
+    jogoAtivo = false;
+    elMensagem.textContent = '🎉 Você venceu!';
+    elMensagem.classList.add('vitoria');
+    finalizarJogo();
+  } else if (perdeu) {
+    jogoAtivo = false;
+    elMensagem.textContent = `😢 Você perdeu! A palavra era: ${palavraAtual}`;
+    elMensagem.classList.add('derrota');
+    elPalavra.textContent = palavraAtual.split('').join(' ');
+    finalizarJogo();
+  }
+}
+
+function finalizarJogo() {
+  btnReiniciar.style.display = 'inline-block';
+  document.querySelectorAll('.tecla').forEach(b => (b.disabled = true));
+}
+
+btnReiniciar.addEventListener('click', novoJogo);
+
+// permite jogar com o teclado físico também
+document.addEventListener('keydown', (e) => {
+  const letra = e.key.toUpperCase();
+  if (letra.length === 1 && letra >= 'A' && letra <= 'Z') {
+    const botoes = document.querySelectorAll('.tecla');
+    for (const b of botoes) {
+      if (b.textContent === letra && !b.disabled) {
+        tentarLetra(letra, b);
+        break;
+      }
+    }
+  }
+});
+
+novoJogo();
+</script>
+
+</body>
+</html>
